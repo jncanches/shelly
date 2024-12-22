@@ -1,0 +1,78 @@
+//colors can be overrided in KVS.colors 
+//transitionDuration can be overrided in KVS.transitionDuration 
+let colors = {
+  "purple": [255,0,230],
+  "blue": [0,0,255],
+  "cyan": [0,255,255],
+  "green": [0,255,0],
+  "yellow": [255,255,0],
+  "red": [255,0,0]
+};
+let transitionDuration = 1;
+
+let userData = null;
+let logStr = "";
+
+function onEvent(eventData) {
+   //print("Event called: ", JSON.stringify(eventData));
+   //eventData.info.event can be "btn_down", "btn_up", "double_push", "triple_push"
+   switch(eventData.info.event) {
+     case "double_push":
+       Shelly.call("RGBW.GetStatus", {id: 0}, function(result) {
+         print("GetStatus: ", JSON.stringify(result));
+         switchColor(result.rgb);
+       });
+       break;
+     case "triple_push":
+       Shelly.call("RGBW.GetStatus", {id: 0}, function(result) {
+         switchMode(result);
+       });
+       break;
+  }
+}
+
+function switchColor(currentColor) {
+  const nextColor = findNextColor(currentColor);
+  Shelly.call("RGBW.Set", {id: 0, rgb:nextColor, white: 0, on: true, transition_duration: transitionDuration});   
+}
+
+function findNextColor(currentColor) {
+  const firstColorName = Object.keys(colors)[0];
+  let result = colors[firstColorName];
+  let colorFound = false;
+  for (var colorName in colors) {
+    if (colorFound) {
+      result = colors[colorName];
+      break;
+    }
+    colorFound = JSON.stringify(currentColor) == JSON.stringify(colors[colorName]);
+  }
+  return result;
+}
+
+function switchMode(status) {
+  //print("Status: ", JSON.stringify(status));
+  if (status.white) {
+    Shelly.call("RGBW.Set", {id: 0, rgb:[255,255,255], white: 0, on: true, transition_duration: transitionDuration});   
+  } else if (JSON.stringify(status.rgb) == JSON.stringify([255,255,255])) {
+    switchColor(status.rgb);
+  } else {
+    Shelly.call("RGBW.Set", {id: 0, rgb:[0,0,0], white: 170, on: true, transition_duration: transitionDuration});
+  }
+}
+
+function log(str) {
+  logStr += str + "\n";
+}
+ 
+Shelly.addEventHandler(onEvent, userData);
+Shelly.call("KVS.Get", {"key": "colors"}, function(result) {
+  if (!result) return;
+  colors = JSON.parse(result.value);
+});
+Shelly.call("KVS.Get", {"key": "transitionDuration"}, function(result) {
+  if (!result) return;
+  transitionDuration = JSON.parse(result.value);
+});
+//ensure button_doublepush is disabled in config
+Shelly.call("RGBW.SetConfig", {id: 0, config:{"button_presets":{"button_doublepush":null}}});
